@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """
 StudyFlow MCP Server
-Exposes NotebookLM notebook management as MCP tools for Claude Desktop.
+Exposes NotebookLM source management as MCP tools for Claude Desktop.
 
 Tools:
   - studyflow_list_notebooks  — list all notebooks
   - studyflow_ask             — query a notebook
   - studyflow_add_url         — add URL directly to NotebookLM
   - studyflow_add_research    — NotebookLM web research → import all sources
+  - studyflow_add_youtube     — yt-dlp transcript → NotebookLM
   - studyflow_source_list     — list sources in a notebook
 """
 
 import asyncio
 import json
 import os
+import re
 import subprocess
+import tempfile
+from pathlib import Path
 
 import mcp.server.stdio
 import mcp.types as types
@@ -62,6 +66,78 @@ def set_notebook(notebook_id: str) -> None:
     run(["notebooklm", "use", notebook_id])
 
 
+# ─── yt-dlp transcript extraction ────────────────────────────────────────────
+
+def extract_youtube_transcript(url: str, out_dir: str) -> str:
+    """
+    Use yt-dlp to extract a YouTube transcript/subtitles as clean text.
+    Returns path to the saved .txt file.
+    """
+    # Get video title for filename
+    title_result = subprocess.run(
+        ["yt-dlp", "--print", "%(title)s", "--no-playlist", url],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+    title = re.sub(r'[^\w\s-]', '', title_result.stdout.strip())[:60] or "transcript"
+    out_base = os.path.join(out_dir, title)
+
+    # Try to get auto-generated or manual subtitles
+    subprocess.run(
+        [
+            "yt-dlp",
+            "--write-subs", "--write-auto-subs",
+            "--sub-lang", "en",
+            "--sub-format", "vtt",
+            "--skip-download",
+            "--no-playlist",
+            "-o", out_base,
+            url,
+        ],
+        capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
+
+    # Find the downloaded .vtt file
+    vtt_files = list(Path(out_dir).glob("*.vtt"))
+    if not vtt_files:
+        # Fallback: use video description
+        info_result = subprocess.run(
+            ["yt-dlp", "--print", "%(title)s\n%(description)s", "--no-playlist", url],
+            capture_output=True, text=True, encoding="utf-8", errors="replace"
+        )
+        txt_path = out_base + "_description.txt"
+        Path(txt_path).write_text(info_result.stdout, encoding="utf-8")
+        return txt_path
+
+    vtt_path = str(vtt_files[0])
+
+    # Convert VTT → clean text (remove timestamps and formatting)
+    vtt_content = Path(vtt_path).read_text(encoding="utf-8", errors="replace")
+    lines = vtt_content.split("\n")
+    text_lines = []
+    seen = set()
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("WEBVTT") or line.startswith("NOTE"):
+            continue
+        if re.match(r'^\d{2}:\d{2}', line):  # timestamp
+            continue
+        if re.match(r'^\d+$', line):  # sequence number
+            continue
+        line = re.sub(r'<[^>]+>', '', line)  # strip HTML tags
+        if line and line not in seen:
+            seen.add(line)
+            text_lines.append(line)
+
+    clean_text = "\n".join(text_lines)
+    txt_path = out_base + "_transcript.txt"
+    Path(txt_path).write_text(clean_text, encoding="utf-8")
+    Path(vtt_path).unlink(missing_ok=True)
+    return txt_path
+
+
 # ─── MCP Server ──────────────────────────────────────────────────────────────
 
 server = Server("studyflow")
@@ -74,6 +150,33 @@ async def list_tools() -> list[types.Tool]:
             name="studyflow_list_notebooks",
             description="List all NotebookLM notebooks with their IDs and titles.",
             inputSchema={"type": "object", "properties": {}},
+        ),
+        types.Tool(
+            name="studyflow_add_youtube",
+            description=(
+                "Add a YouTube video to a NotebookLM notebook. "
+                "Extracts the transcript as a text file using yt-dlp and uploads it as a source. "
+                "Use this for YouTube lecture videos, tutorials, talks, etc."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "notebook": {
+                        "type": "string",
+                        "description": "Notebook name (partial match OK, e.g. 'AI agent', 'DSA')",
+                    },
+                    "youtube_url": {
+                        "type": "string",
+                        "description": "Full YouTube video URL",
+                    },
+                    "as_url": {
+                        "type": "boolean",
+                        "description": "If true, add the YouTube URL directly instead of extracting transcript",
+                        "default": False,
+                    },
+                },
+                "required": ["notebook", "youtube_url"],
+            },
         ),
         types.Tool(
             name="studyflow_add_url",
@@ -156,6 +259,27 @@ async def _dispatch(name: str, args: dict) -> str:
             lines.append(f"  • {nb['title']} (id: {nb['id'][:8]}...)")
         return "\n".join(lines)
 
+    elif name == "studyflow_add_youtube":
+        notebook, url = args["notebook"], args["youtube_url"]
+        as_url = args.get("as_url", False)
+
+        nb_id, nb_title = find_notebook_id(notebook)
+        set_notebook(nb_id)
+
+        if as_url:
+            out = run(["notebooklm", "source", "add", url])
+            return f"✅ Added YouTube URL to '{nb_title}':\n{out}"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            txt_path = extract_youtube_transcript(url, tmpdir)
+            fname = Path(txt_path).name
+            out = run(["notebooklm", "source", "add", txt_path])
+            return (
+                f"✅ Transcript extracted and added to '{nb_title}'.\n"
+                f"File: {fname}\n"
+                f"NotebookLM response: {out[:300]}"
+            )
+
     elif name == "studyflow_add_url":
         nb_id, nb_title = find_notebook_id(args["notebook"])
         set_notebook(nb_id)
@@ -202,7 +326,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="studyflow",
-                server_version="0.2.0",
+                server_version="0.3.0",
                 capabilities=server.get_capabilities(
                     notification_options=None,
                     experimental_capabilities={},
