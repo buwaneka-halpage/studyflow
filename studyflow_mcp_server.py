@@ -6,6 +6,9 @@ Exposes NotebookLM notebook management as MCP tools for Claude Desktop.
 Tools:
   - studyflow_list_notebooks  — list all notebooks
   - studyflow_ask             — query a notebook
+  - studyflow_add_url         — add URL directly to NotebookLM
+  - studyflow_add_research    — NotebookLM web research → import all sources
+  - studyflow_source_list     — list sources in a notebook
 """
 
 import asyncio
@@ -73,6 +76,53 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={"type": "object", "properties": {}},
         ),
         types.Tool(
+            name="studyflow_add_url",
+            description=(
+                "Add a URL directly to a NotebookLM notebook without scraping. "
+                "NotebookLM natively supports: web pages, YouTube URLs, PDFs, Google Docs."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "notebook": {"type": "string", "description": "Notebook name"},
+                    "url": {"type": "string", "description": "URL to add"},
+                },
+                "required": ["notebook", "url"],
+            },
+        ),
+        types.Tool(
+            name="studyflow_add_research",
+            description=(
+                "Use NotebookLM's web research feature to find and add sources on a topic. "
+                "Modes: 'fast' (5-10 sources, seconds) or 'deep' (20+ sources, 2-5 minutes)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "notebook": {"type": "string", "description": "Notebook name"},
+                    "query": {"type": "string", "description": "Topic or search query"},
+                    "mode": {
+                        "type": "string",
+                        "enum": ["fast", "deep"],
+                        "description": "Research depth (default: fast)",
+                        "default": "fast",
+                    },
+                },
+                "required": ["notebook", "query"],
+            },
+        ),
+        types.Tool(
+            name="studyflow_source_list",
+            description="List all sources in a NotebookLM notebook with their status.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "notebook": {"type": "string", "description": "Notebook name"},
+                },
+                "required": ["notebook"],
+            },
+        ),
+        types.Tool(
             name="studyflow_ask",
             description="Ask a question to a NotebookLM notebook and get a grounded answer.",
             inputSchema={
@@ -106,6 +156,33 @@ async def _dispatch(name: str, args: dict) -> str:
             lines.append(f"  • {nb['title']} (id: {nb['id'][:8]}...)")
         return "\n".join(lines)
 
+    elif name == "studyflow_add_url":
+        nb_id, nb_title = find_notebook_id(args["notebook"])
+        set_notebook(nb_id)
+        out = run(["notebooklm", "source", "add", args["url"]])
+        return f"✅ Added to '{nb_title}':\n{out[:400]}"
+
+    elif name == "studyflow_add_research":
+        nb_id, nb_title = find_notebook_id(args["notebook"])
+        set_notebook(nb_id)
+        mode = args.get("mode", "fast")
+        query = args["query"]
+        cmd = ["notebooklm", "source", "add-research", query, "--mode", mode, "--import-all"]
+        out = run(cmd)
+        return f"✅ Research completed for '{nb_title}':\n{out[:500]}"
+
+    elif name == "studyflow_source_list":
+        nb_id, nb_title = find_notebook_id(args["notebook"])
+        set_notebook(nb_id)
+        raw = run(["notebooklm", "source", "list", "--json"])
+        data = json.loads(raw)
+        sources = data.get("sources", [])
+        lines = [f"Sources in '{nb_title}' ({len(sources)} total):\n"]
+        for s in sources:
+            status_icon = "✅" if s.get("status") == "ready" else "⏳"
+            lines.append(f"  {status_icon} [{s['index']}] {s['title'][:70]}")
+        return "\n".join(lines)
+
     elif name == "studyflow_ask":
         nb_id, nb_title = find_notebook_id(args["notebook"])
         set_notebook(nb_id)
@@ -125,7 +202,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="studyflow",
-                server_version="0.1.0",
+                server_version="0.2.0",
                 capabilities=server.get_capabilities(
                     notification_options=None,
                     experimental_capabilities={},
