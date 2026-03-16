@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "studyflow": {
+      "command": "python",
+      "args": [
+        "/path/to/studyflow_mcp_server.py"
+      ]
+    }
+  }
+}

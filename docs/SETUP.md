@@ -59,3 +59,33 @@ Copy `SKILL.md` to `~/.claude/skills/studyflow/SKILL.md`.
 ```
 /studyflow notes "Your Notebook Name" --topic "Dynamic Programming"
 ```
+
+## Dependencies
+
+```
+mcp>=1.0.0           # MCP SDK (required)
+requests>=2.31.0     # HTTP client for web scraping
+beautifulsoup4>=4.12.0  # HTML parsing
+duckduckgo-search>=6.0.0  # Web search (no API key)
+yt-dlp               # YouTube transcript extraction
+```
+
+Install all at once:
+```bash
+pip install -r requirements.txt
+pip install yt-dlp  # yt-dlp is not on PyPI as a normal package
+```
+
+## Notion MCP
+
+StudyFlow requires the Notion MCP server configured in Claude Code.
+Add to your Claude Code MCP config and authenticate with your Notion account.
+
+## notebooklm CLI
+
+Install from: https://github.com/example/notebooklm-cli
+
+Authenticate:
+```bash
+notebooklm login
+```
