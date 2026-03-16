@@ -215,3 +215,71 @@ Run `/studyflow setup` to populate. Then update this section with your IDs.
 | 📅 Study Sessions (DB) | `YOUR_STUDY_SESSIONS_ID` |
 
 **When creating entries in databases**, use `data_source_id` as the parent type.
+
+---
+
+### `/studyflow quiz <notebook-name-or-id>`
+
+Import NotebookLM's quiz into the Quiz Bank.
+
+**Workflow:**
+1. Find and set notebook context
+2. `PYTHONIOENCODING=utf-8 notebooklm generate quiz --json`
+3. Wait: `PYTHONIOENCODING=utf-8 notebooklm artifact wait <artifact_id> --timeout 900`
+4. Download: `PYTHONIOENCODING=utf-8 notebooklm download quiz --format json ./studyflow_quiz_temp.json`
+5. Parse JSON → create Quiz Bank entries via Notion MCP
+6. Delete temp file
+7. Also generate 5 short-answer questions via chat: `notebooklm ask "Give me 5 short-answer questions with model answers. Format: Q: [question]\nA: [answer]\n---"`
+
+---
+
+### `/studyflow feynman <notebook-name-or-id> --topic <topic>`
+
+Generate or update a Feynman Explanation for a topic.
+
+**Workflow:**
+1. Find the notebook
+2. `notebooklm ask "Explain [topic] as if you're teaching a curious 12-year-old with no CS background. Use a real-world analogy. Avoid all jargon."`
+3. `notebooklm ask "What are the 3 things that confuse most students about [topic]?"`
+4. Check if a note for this topic already exists in Knowledge Base (search Notion)
+5. If yes: update the Feynman block, set Feynman Done = true
+6. If no: create a minimal note page with just the Feynman section + Active Recall
+
+---
+
+### `/studyflow study <notebook-name-or-id>`
+
+Full study session — runs notes + flashcards + quiz sequentially.
+
+**Workflow:**
+1. Find notebook
+2. Ask: "What topic to focus on? (Leave blank for full notebook overview)"
+3. Run: notes → flashcards → quiz in sequence
+4. Offer: "Review cards now? (10 cards)"
+5. Create Study Session log entry
+6. Show session summary: notes created, cards created, quiz questions imported
+
+---
+
+### `/studyflow brief`
+
+Daily study brief — morning overview.
+
+**Workflow:**
+1. Query Flashcard Vault for cards with Next Review ≤ today → count
+2. Query Knowledge Base for notes with Last Reviewed > 14 days ago → suggest re-reading
+3. Check Study Sessions for streak (consecutive days with sessions)
+4. Suggest one notebook to study today
+
+**Output:**
+```
+☀️ StudyFlow Daily Brief — [date]
+
+🃏 Due for review: N cards
+📚 Suggested topic: [notebook/topic]
+🔁 Study streak: N days
+⚠️ Needs revisiting: [topics last reviewed 14+ days ago]
+
+Quick start: /studyflow review
+             /studyflow notes "[suggested]"
+```
