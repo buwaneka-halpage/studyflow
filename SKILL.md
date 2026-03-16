@@ -365,3 +365,67 @@ Re-sync an updated notebook — add new content, update existing notes.
 4. New topics not in KB → create note stubs
 5. Existing notes → append `📥 Updated Content` block
 6. Generate N new flashcards for new content only
+
+---
+
+### `/studyflow search-youtube <query> [--count N] [--filter lecture|tutorial|short|any] [--add <notebook>]`
+
+Search YouTube for videos related to a topic and optionally add selected ones to a notebook.
+
+**Workflow:**
+1. Run yt-dlp in metadata-only mode (no download):
+   ```bash
+   yt-dlp "ytsearch{count}:{query}" \
+     --print "%(title)s\t%(webpage_url)s\t%(duration_string)s\t%(channel)s\t%(view_count)s" \
+     --no-playlist --skip-download --no-warnings
+   ```
+2. Parse tab-separated output into a ranked list
+3. Apply `--filter` re-ranking (not filtering — avoids zero results):
+   - `lecture` — re-rank by duration desc, prefer >30 min
+   - `tutorial` — re-rank by view count, prefer 5–60 min range
+   - `short` — prefer under 15 minutes
+4. Display numbered results with channel, duration, view count
+5. If `--add <notebook>` given, ask which numbers to add → run add workflow for each
+
+**Quality guidance for CSE content:**
+- University lectures: MIT OCW, Stanford, NPTEL, CMU, IIT
+- Algorithms/DS: Abdul Bari, William Fiset, NeetCode, Back To Back SWE
+- AI/ML: Andrej Karpathy, Lex Fridman, StatQuest
+- System design: Gaurav Sen, ByteByteGo
+
+---
+
+### `/studyflow add <notebook-name> <source> [--type youtube|web|url]`
+
+Add a new source to a NotebookLM notebook — YouTube video, scraped web page, or direct URL.
+
+**Source type auto-detection:**
+- URL contains `youtube.com` or `youtu.be` → YouTube
+- URL starts with `http` (non-YouTube) → web
+- Local file path → file upload
+
+**YouTube workflow:**
+1. Extract transcript via yt-dlp (VTT → clean text, deduplicate overlapping lines)
+2. Try `notebooklm source add-url <youtube_url>` first (native support)
+3. If fails: upload the extracted `.txt` transcript
+
+**Web workflow:**
+1. Scrape with site-specific selectors (GeeksForGeeks, MDN, Wikipedia, Stack Overflow, generic)
+2. Save to temp `.txt`, upload to NotebookLM
+
+**Error handling:**
+| Error | Action |
+|-------|--------|
+| yt-dlp not installed | `pip install yt-dlp` then retry |
+| No English subtitles | Try `--sub-lang en,en-US,en-GB` or notify user |
+| 403 Forbidden | Try different User-Agent, or ask user to paste content |
+| Source add fails | Show error, suggest adding via notebooklm.google.com |
+
+---
+
+## Output Style
+
+- Show progress as you work: "🔍 Querying NotebookLM...", "📝 Creating note page...", "🃏 Adding 15 flashcards..."
+- Use tables to summarize results
+- End every command with a clear summary: what was created, where to find it in Notion
+- Always use `PYTHONIOENCODING=utf-8` prefix on all `notebooklm` commands (Windows Unicode fix)
