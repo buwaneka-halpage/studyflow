@@ -283,3 +283,85 @@ Daily study brief — morning overview.
 Quick start: /studyflow review
              /studyflow notes "[suggested]"
 ```
+
+---
+
+### `/studyflow podcast <notebook-name-or-id>`
+
+Generate a NotebookLM podcast and extract key insights as a Notion note.
+
+**Workflow:**
+1. Ask confirmation: "Generate a Deep Dive podcast for [notebook]? (~15 min) [Y/n]"
+2. `PYTHONIOENCODING=utf-8 notebooklm generate audio "Focus on most important concepts and counterintuitive insights" --json`
+3. While waiting, pre-generate notes via chat:
+   - `notebooklm ask "What are the 5 most important concepts and the most surprising/counterintuitive thing?"`
+   - `notebooklm ask "What are the key takeaways a student should remember?"`
+4. Create `🎧 Podcast Notes — [notebook]` page in Knowledge Base
+
+---
+
+### `/studyflow mindmap <notebook-name-or-id>`
+
+Convert a NotebookLM mind map into a Notion page hierarchy.
+
+**Workflow:**
+1. `PYTHONIOENCODING=utf-8 notebooklm generate mind-map --json` (synchronous/instant)
+2. `PYTHONIOENCODING=utf-8 notebooklm download mind-map ./studyflow_mindmap_temp.json`
+3. Parse JSON tree structure
+4. Create `🗺️ Concept Map — [notebook]` page under course
+5. Recursively mirror the hierarchy: top-level → H2, second-level → H3/child pages, leaves → bullets
+6. Report: "Created N top-level concepts and M sub-topics"
+
+---
+
+### `/studyflow slides <notebook-name-or-id>`
+
+Import a NotebookLM slide deck summary into Notion.
+
+**Workflow:**
+1. Ask confirmation (long-running)
+2. `PYTHONIOENCODING=utf-8 notebooklm generate slide-deck --json`
+3. While waiting: `notebooklm ask "Outline the main sections for a presentation. Format: SLIDE: [title]\nPOINTS: [p1] | [p2] | [p3]\n---"`
+4. Create `📊 Slide Notes — [notebook]` page; each slide → H3 section with key points
+
+---
+
+### `/studyflow exam <course-name> --days <N>`
+
+Exam preparation mode.
+
+**Workflow:**
+1. Search Knowledge Base + Flashcard Vault for the course
+2. Count due cards, mastery distribution
+3. Calculate cards_per_day = (total_not_mastered) / days
+4. Create `📅 Exam Prep — [course] — [date]` page with:
+   - Exam date, daily review target, topics not yet covered (⬜ New mastery)
+   - Weakest flashcards (lowest Ease Factor), daily schedule template
+5. Set all unreviewed cards' Next Review to today (crunch mode)
+
+---
+
+### `/studyflow project <project-name>`
+
+Create a project page bridging freelance work to curriculum concepts.
+
+**Workflow:**
+1. Ask: "What technologies/concepts are you using in this project?"
+2. Create `🔧 [project-name]` page under Projects & Freelance with:
+   - Tech Stack table (Technology | Purpose | Learning Status)
+   - Curriculum Connections: which courses/concepts relate
+   - Learning Gaps: technologies used but not in any notebook
+
+---
+
+### `/studyflow sync <notebook-name-or-id>`
+
+Re-sync an updated notebook — add new content, update existing notes.
+
+**Workflow:**
+1. Find notebook, `notebooklm source list --json` — note recent additions
+2. `notebooklm ask "What new concepts does the most recently added content cover?"`
+3. Search Knowledge Base for existing notes from this notebook
+4. New topics not in KB → create note stubs
+5. Existing notes → append `📥 Updated Content` block
+6. Generate N new flashcards for new content only
