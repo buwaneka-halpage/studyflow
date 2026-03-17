@@ -6,5 +6,8 @@
         "/path/to/studyflow_mcp_server.py"
       ]
     }
+  },
+  "preferences": {
+    "coworkScheduledTasksEnabled": true
   }
 }
