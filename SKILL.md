@@ -90,6 +90,7 @@ Generate a structured note page in Notion's Knowledge Base.
    - `notebooklm ask "Give me a concrete example or code example of [topic] in action"`
    - `notebooklm ask "What are 5-8 active recall questions that test deep understanding of [topic]?"`
    - `notebooklm ask "How does [topic] connect to or differ from related concepts?"`
+   - `notebooklm ask "Describe the key steps, states, or relationships in [topic] that could be drawn as a diagram (e.g. flowchart of an algorithm, state transitions, system components, data structure shape)"` — use this to inform diagram generation
 4. Synthesize into a structured page using the Note Page Template below
 5. Create in Knowledge Base using `mcp__claude_ai_Notion__notion-create-pages`
 6. Log a Study Session entry
@@ -122,6 +123,15 @@ Generate a structured note page in Notion's Knowledge Base.
 ## 💻 Code Example
 [Well-annotated example with inline comments explaining WHY]
 
+## 📊 Visual Diagram
+[Mermaid code block — include when the topic has a flow, structure, or relationship that benefits
+from visualization. See the Mermaid Diagram Guidelines section for which type to use.
+Omit this section only if the topic is purely abstract with no meaningful structure to draw.]
+
+```mermaid
+[diagram here — e.g. flowchart TD, graph LR, stateDiagram-v2, sequenceDiagram, classDiagram, erDiagram]
+```
+
 ## ⚠️ Common Pitfalls
 - ❌ [Mistake] → ✅ [Correct approach]
 
@@ -133,9 +143,11 @@ Generate a structured note page in Notion's Knowledge Base.
 ```
 
 **Type-specific additions:**
-- **algo**: Add `⏱️ Complexity` section with Time/Space/Best/Worst/Average
-- **tech**: Add `🔧 Quick Setup` section
-- **lecture**: Replace code section with `📋 Lecture Key Points` bullets
+- **algo**: Add `⏱️ Complexity` section with Time/Space/Best/Worst/Average; diagram = `flowchart TD` of the algorithm steps
+- **tech**: Add `🔧 Quick Setup` section; diagram = `graph LR` of component/data flow
+- **lecture**: Replace code section with `📋 Lecture Key Points` bullets; diagram = whatever best fits the lecture content
+- **concept** (ToC, OS, DB): diagram = `stateDiagram-v2` for automata/process states, `erDiagram` for DB schemas, `graph LR` for concept relationships
+- **pattern** (Design Patterns): diagram = `classDiagram` showing class relationships
 
 ---
 
@@ -187,6 +199,137 @@ Easy  (score=5): if repetitions=0: interval=1
                  repetitions += 1
                  ease_factor = min(4.0, ease_factor + 0.1)
 Next Review = today + interval days
+```
+
+---
+
+## Mermaid Diagram Guidelines
+
+Use Notion's Mermaid code block (Code block → language: `mermaid`) to add diagrams to note pages.
+**Always include a diagram when the topic has a flow, hierarchy, state machine, or structural relationship.**
+Visual diagrams dramatically improve understanding for complex CSE topics — prioritize them for algorithms, automata, system design, and data structures.
+
+### When to draw a diagram
+
+| Topic type | Draw a diagram when... | Preferred Mermaid type |
+|------------|------------------------|------------------------|
+| **Algorithm** | The algorithm has steps, branches, or recursion | `flowchart TD` |
+| **Data Structure** | There's a visual shape (tree, graph, linked list) | `graph LR` or `graph TD` |
+| **Automata / State Machine** (ToC) | DFA, NFA, pushdown automaton | `stateDiagram-v2` |
+| **OS Concepts** | Process lifecycle, memory management, scheduling | `stateDiagram-v2` or `flowchart TD` |
+| **Database** | Schema relationships, ER model, query plan | `erDiagram` |
+| **OOP / Design Patterns** | Class hierarchy, composition, inheritance | `classDiagram` |
+| **Network / Protocols** | Request-response, handshake, packet flow | `sequenceDiagram` |
+| **System Architecture** | Components, services, data flow | `graph LR` |
+| **Compiler Pipeline** | Lexing → parsing → AST → codegen stages | `flowchart LR` |
+| **Concept relationships** | How concepts connect or depend on each other | `graph LR` |
+
+### Mermaid syntax quick reference
+
+**Flowchart — algorithm steps, decision trees:**
+```mermaid
+flowchart TD
+    A[Start] --> B{Condition?}
+    B -- Yes --> C[Do X]
+    B -- No --> D[Do Y]
+    C --> E[End]
+    D --> E
+```
+
+**State diagram — automata, process/OS states:**
+```mermaid
+stateDiagram-v2
+    [*] --> New
+    New --> Ready : admitted
+    Ready --> Running : scheduler dispatch
+    Running --> Waiting : I/O request
+    Running --> Ready : interrupt
+    Waiting --> Ready : I/O complete
+    Running --> [*] : exit
+```
+
+**Sequence diagram — protocol flows, API calls:**
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+    participant DB
+    Client->>Server: POST /login
+    Server->>DB: SELECT user WHERE email=?
+    DB-->>Server: user record
+    Server-->>Client: 200 OK + JWT
+```
+
+**Graph — data structures, concept maps, component graphs:**
+```mermaid
+graph LR
+    A[Sorting] --> B[Comparison-based]
+    A --> C[Non-comparison]
+    B --> D[Merge Sort O(n log n)]
+    B --> E[Quick Sort O(n log n) avg]
+    C --> F[Counting Sort O(n+k)]
+    C --> G[Radix Sort O(nk)]
+```
+
+**Class diagram — OOP, design patterns:**
+```mermaid
+classDiagram
+    class Animal {
+        +String name
+        +speak() String
+    }
+    class Dog {
+        +fetch()
+    }
+    class Cat {
+        +purr()
+    }
+    Animal <|-- Dog
+    Animal <|-- Cat
+```
+
+**ER diagram — database schemas:**
+```mermaid
+erDiagram
+    STUDENT ||--o{ ENROLLMENT : has
+    COURSE  ||--o{ ENROLLMENT : has
+    STUDENT {
+        int id PK
+        string name
+        string email
+    }
+    ENROLLMENT {
+        int student_id FK
+        int course_id FK
+        date enrolled_on
+    }
+```
+
+### Decision rule: include vs. skip
+
+**Include a diagram if ANY of these are true:**
+- The topic has 3+ steps that happen in order
+- There are states and transitions between them
+- There are two or more entities with relationships
+- A whiteboard drawing would make this clearer in 30 seconds
+- The topic involves a tree, graph, or hierarchical structure
+
+**Skip the diagram if ALL of these are true:**
+- The topic is a definition or theorem with no process or structure
+- A diagram would just repeat what the text already says clearly
+- There is no meaningful visual representation
+
+### How to create in Notion via API
+
+When using `mcp__claude_ai_Notion__notion-create-pages`, add the diagram as a `code` block:
+```json
+{
+  "type": "code",
+  "code": {
+    "language": "mermaid",
+    "rich_text": [{ "type": "text", "text": { "content": "flowchart TD\n    A --> B" } }]
+  }
+}
 ```
 
 ---
